@@ -1,8 +1,29 @@
 import sqlite3, os, hashlib
 from flask import Flask, jsonify, render_template, request, g
+from peewee import *
+from playhouse.sqlite_ext import SqliteExtDatabase
+
+
+
+
 
 app = Flask(__name__)
-app.database = "sample.db"
+app.database = SqliteExtDatabase('sample.db')
+databaseinsert = "sample.db"
+
+class BaseModel(Model):
+    class Meta:
+        database = app.database
+
+class Employees(BaseModel):
+    username = TextField(unique=True)
+    password= TextField()
+
+class Shop_items(BaseModel):
+	name =TextField()
+ 	quantity= TextField()
+	price = TextField()
+
 
 @app.route('/')
 def index():
@@ -51,11 +72,11 @@ def storeapi():
 
 @app.route('/api/v1.0/storeAPI/<item>', methods=['GET'])
 def searchAPI(item):
-    g.db = connect_db()
+    #app.database = connect_db()
     #curs = g.db.execute("SELECT * FROM shop_items WHERE name=?", item) #The safe way to actually get data from db
-    curs = g.db.execute("SELECT * FROM shop_items WHERE name = '%s'" %item)
-    results = [dict(name=row[0], quantity=row[1], price=row[2]) for row in curs.fetchall()]
-    g.db.close()
+    #curs = g.db.execute("SELECT * FROM shop_items WHERE name = '%s'" %item)
+    curs=Shop_items.select().where(Shop_items.name == item)
+    results = [dict(name=row.name, quantity=row.quantity, price=row.price) for row in curs]
     return jsonify(results)
 
 @app.errorhandler(404)
@@ -69,6 +90,12 @@ def internal_server_error(error):
 def connect_db():
     return sqlite3.connect(app.database)
 
+def initialize():
+    app.database.connect()
+    app.database.create_tables([Shop_items, Employees], safe=True)
+    app.database.close()
+
+
 # Create password hashes
 def hash_pass(passw):
 	m = hashlib.md5()
@@ -76,20 +103,10 @@ def hash_pass(passw):
 	return m.hexdigest()
 
 if __name__ == "__main__":
-
-    #create database if it doesn't exist yet
-    if not os.path.exists(app.database):
-        with sqlite3.connect(app.database) as connection:
-            c = connection.cursor()
-            c.execute("""CREATE TABLE shop_items(name TEXT, quantitiy TEXT, price TEXT)""")
-            c.execute("""CREATE TABLE employees(username TEXT, password TEXT)""")
-            c.execute('INSERT INTO shop_items VALUES("water", "40", "100")')
-            c.execute('INSERT INTO shop_items VALUES("juice", "40", "110")')
-            c.execute('INSERT INTO shop_items VALUES("candy", "100", "10")')
-            c.execute('INSERT INTO employees VALUES("itsjasonh", "{}")'.format(hash_pass("badword")))
-            c.execute('INSERT INTO employees VALUES("theeguy9", "{}")'.format(hash_pass("badpassword")))
-            c.execute('INSERT INTO employees VALUES("newguy29", "{}")'.format(hash_pass("pass123")))
-            connection.commit()
-            connection.close()
-
+    initialize()
+    Shop_items.insert(	name="water",quantity= "1",price="10").execute()
+    print("INSERTED")
     app.run(host='0.0.0.0') # runs on machine ip address to make it visible on netowrk
+
+    
+	
